@@ -10,6 +10,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <poll.h>        // ← poll()
+#include <cstring>       // strerror(), memset()
+
 
 class SimpleSocket 
 {

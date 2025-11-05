@@ -1,4 +1,6 @@
 #include "Server.hpp"
+#include <fcntl.h>
+#include <unistd.h>
 
 // _______________________________NO SE SI ES NECESARIO CAMBIAR EL PUERT
 //_______________________________ESTA QUI
@@ -13,12 +15,12 @@ Server::~Server()
 {
 }
 
-void    Server::accept()
+void Server::accept()
 {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
-    // esperar a una conexión de cliente
+    // receive connection (::accept from sys/socket.h)
     clientSocket = ::accept(getServerSocket()->getSocket(), (struct sockaddr *)&client_addr, &client_len);
     if (clientSocket < 0)
     {
@@ -26,14 +28,17 @@ void    Server::accept()
         exit(EXIT_FAILURE);
     }
 
-    ssize_t r = ::read(clientSocket, buffer, sizeof(buffer) - 1); // leer datos del cliente
-    if (r < 0)
+    int flags = fcntl(clientSocket, F_GETFL, 0);
+    fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK); // Set non-blocking mode(no wait when nothing))
+
+    int r = ::read(clientSocket, buffer, sizeof(buffer) - 1);
+    if (r <= 0)
     {
-        perror("Error reading from client");
-        ::close(clientSocket);
+        buffer[0] = '\0';
         return;
     }
-    buffer[r] = '\0'; // asegurar terminación
+
+    buffer[r] = '\0';
 }
 
 void    Server::handle()
@@ -48,19 +53,94 @@ void   Server::respond()
     close(clientSocket); //close the client socket after responding
 }
 
-void   Server::launch()
+void Server::launch()
 {
-    // Mostrar URL/IP de acceso
     struct sockaddr_in addr = getServerSocket()->getAddress();
     int port = ntohs(addr.sin_port);
-    std::cout << "Accede en: http://localhost:" << port << "/" << std::endl;
+
+    struct pollfd pfd;
+    pfd.fd = getServerSocket()->getSocket();
+    pfd.events = POLLIN; //Wait for incoming connections
+
 
     while (1)
     {
-        std::cout << "=======Waiting for connections...=======" << std::endl;
-        accept();
-        handle();
-        respond();
-        std::cout << "=======Response sent, connection closed.=======" << std::endl;
+        std::cout << "\nLink : http://localhost:" << port << "/" << std::endl;
+
+        std::cout << "Waiting" << std::flush;
+        int waitedMs = 0;
+        const int dotTimer = 1000;
+        const int timeoutMs = 5000;
+
+        while (waitedMs < timeoutMs)
+        {
+            int ret = poll(&pfd, 1, dotTimer);
+            if (ret < 0)
+            {
+                perror("poll error");
+                break;
+            }
+            if (ret == 0)
+            {
+                std::cout << "." << std::flush;
+                waitedMs += dotTimer;
+                continue;
+            }
+
+            break;
+        }
+
+        std::cout << std::endl;
+
+
+        if (pfd.revents & POLLIN)
+        {
+            std::cout << "[+] Nueva conexión detectada" << std::endl;
+            accept();
+            handle();
+            respond();
+        }
+        else
+        {
+            std::cout << "[-] No hay conexiones nuevas" << std::endl;
+        }
     }
 }
+
+/*
+void Server::launch()
+{
+    struct sockaddr_in addr = getServerSocket()->getAddress();
+    int port = ntohs(addr.sin_port);
+
+    struct pollfd pfd;
+    pfd.fd = getServerSocket()->getSocket();
+    pfd.events = POLLIN; //Wait for incoming connections
+
+    while (1)
+    {
+        std::cout << "\nLink : http://localhost:" << port << "/" << std::endl;
+        std::cout << "Waiting..." << std::endl;
+
+        int ret = poll(&pfd, 1, 5000); // timeout = 5s
+
+        if (ret < 0)
+        {
+            perror("poll error");
+            continue;
+        }
+        else if (ret == 0)
+        {
+            // if no events, continue the loop
+            std::cout << "There are no connections..." << std::endl;
+            continue;
+        }
+
+        if (pfd.revents & POLLIN)
+        {
+            accept();
+            handle();
+            respond();
+        }
+    }
+}*/
