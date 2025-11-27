@@ -2,6 +2,15 @@
     "files.associations": {
         "xlocmes": "cpp",
         "iostream": "cpp",
-        "istream": "cpp"
+        "istream": "cpp",
+        "xstring": "cpp",
+        "locale": "cpp",
+        "stdexcept": "cpp",
+        "format": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp",
+        "vector": "cpp",
+        "xtree": "cpp",
+        "xutility": "cpp"
     }
 }
