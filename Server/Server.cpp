@@ -85,8 +85,6 @@ void Server::processReadable(Connection &c)
     }
     if (r < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         c.state = Connection::CLOSED;
         return;
     }
@@ -120,8 +118,6 @@ void Server::processWritable(Connection &c)
     int w = ::write(c.fd, c.out.c_str(), c.out.size());
     if (w < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         c.state = Connection::CLOSED;
         return;
     }
@@ -140,7 +136,6 @@ void Server::launch()
     int port = ntohs(addr.sin_port);
     std::cout << "Servidor escuchando en puerto " << port << std::endl;
     std::cout << "URL: http://localhost:" << port << "/" << std::endl;
-    // Print extra listener URLs if any
     for (std::size_t i = 0; i < _extraListeners.size(); ++i)
     {
         int p = ntohs(_extraListeners[i]->getAddress().sin_port);

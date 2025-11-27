@@ -9,7 +9,8 @@ SRC = src/main.cpp \
 	Sockets/ListeningSocket.cpp \
 	Sockets/SimpleSocket.cpp \
 	Server/SimpleServer.cpp \
-	Server/Server.cpp
+	Server/Server.cpp \
+	config/ConfigParser.cpp
 
 OBJ_DIR = obj
 DEP_DIR = deps
@@ -17,7 +18,7 @@ DEP_DIR = deps
 OBJ = $(addprefix $(OBJ_DIR)/, $(notdir $(SRC:.cpp=.o)))
 DEP = $(addprefix $(DEP_DIR)/, $(notdir $(SRC:.cpp=.d)))
 
-INCLUDES = -Isrc -ISockets -IServer
+INCLUDES = -Isrc -ISockets -IServer -Iconfig
 
 all: $(NAME)
 
@@ -31,6 +32,9 @@ $(OBJ_DIR)/%.o: Sockets/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR)/%.o: Server/%.cpp | $(OBJ_DIR) $(DEP_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
+
+$(OBJ_DIR)/%.o: config/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR):

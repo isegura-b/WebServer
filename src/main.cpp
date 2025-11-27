@@ -1,26 +1,42 @@
 #include "Server.hpp"
 #include <vector>
 #include <cstdlib>
+#include <string>
+#include <iostream>
+#include "../config/ConfigParser.hpp"
 
-int main(int argc, char** argv)
+int main(int ac, char** av)
 {
     std::vector<int> ports;
-    for (int i = 1; i < argc; ++i)
-    {
-        int p = std::atoi(argv[i]);
-        if (p > 0 && p < 65536)
-            ports.push_back(p);
+
+    if (ac > 2) {
+        std::cerr << "Usage: " << av[0] << " [config_file]" << std::endl;
+        return 1;
+    }
+    
+    std::string confPath;
+    if (ac >= 2)
+        confPath = av[1];
+    else
+        confPath = "config/example.conf";
+
+    try {
+        ConfigParser parser;
+        Config cfg = parser.parse(confPath);
+        for (std::size_t i = 0; i < cfg.servers.size(); ++i) {
+            if (cfg.servers[i].listenPort > 0)
+                ports.push_back(cfg.servers[i].listenPort);
+        }
+        if (ports.empty()) {
+            std::cerr << "Config parsed but no listen ports defined." << std::endl;
+            return 1;
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "Config error: " << e.what() << "\n";
+        return 1;
     }
 
-    if (ports.empty())
-    {
-        Server server;           // default 8080
-        server.launch();
-    }
-    else ///webserv 8080 8081 9090
-    {
-        Server server(ports);    // multi-port
-        server.launch();
-    }
+    Server server(ports);    // multi-port
+    server.launch();
     return 0;
 }
