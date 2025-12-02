@@ -15,17 +15,18 @@ struct Connection
     enum State
     {
         READING_HEADERS,
+        READING_BODY,
         READY_TO_RESPOND,
         WRITING_RESPONSE,
-        READING_BODY,
         CLOSED
     };
     int fd; // client socket file descriptor
     std::string in;
     std::string out;
-    HttpRequest req;
     State state;
     std::time_t lastActivity;
+    HttpRequest req;
+    size_t expectedBodyLen;
     Connection();
     Connection(int f);
 };

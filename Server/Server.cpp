@@ -72,60 +72,89 @@ void Server::acceptNew(int listenFd)
     std::cout << "[+] Nueva conexión fd=" << cfd << " (http://localhost:" << p << "/)" << std::endl;
 }
 
-static bool endsWithHeaders(const std::string &s)
-{
-    if (s.size() < 4)
-        return false;
-    return s.compare(s.size() - 4, 4, "\r\n\r\n") == 0;
-}
 
 void Server::processReadable(Connection &c)
 {
-    char buffer[4096];
-    int bytes = ::read(c.fd, buffer, sizeof(buffer));
+    char buf[5000];
+    int r = ::read(c.fd, buf, sizeof(buf));
 
-    if (bytes == 0)
+    if (r == 0)
+    {
+        c.state = Connection::CLOSED;
+        return;
+    }
+    if (r < 0)
     {
         c.state = Connection::CLOSED;
         return;
     }
 
-    if (bytes < 0)
-    {
-        c.state = Connection::CLOSED;
-        return;
-    }
-    c.in.append(buffer, bytes);
+    c.in.append(buf, r);
     c.lastActivity = std::time(NULL);
 
-    // Reading headers
     if (c.state == Connection::READING_HEADERS)
     {
-        if (endsWithHeaders(c.in))
+        size_t headerPos = c.in.find("\r\n\r\n");
+        if (headerPos == std::string::npos)
+            return;
+
+        std::string headerPart = c.in.substr(0, headerPos + 4);
+
+        HttpRequest req;
+        if (!HttpParser::parse(req, headerPart))
+            return;
+
+        c.req = req;
+
+        long contentLen = -1;
+        if (req.headers.count("Content-Length"))
+            contentLen = atol(req.headers["Content-Length"].c_str());
+
+        if (contentLen > 0)
         {
-            if (!HttpParser::parse(c.req, c.in))
-                return; // missing content
-
-            if (c.req.hasBody())
-            {
-                c.state = Connection::READING_BODY;
-                return;
-            }
-
+            c.expectedBodyLen = (size_t)contentLen;
+            c.state = Connection::READING_BODY;
+        }
+        else
+        {
+            c.expectedBodyLen = 0;
             c.state = Connection::READY_TO_RESPOND;
         }
     }
 
-    // Reading body
-    else if (c.state == Connection::READING_BODY)
+    if (c.state == Connection::READING_BODY)
     {
-        if (c.in.size() >= c.req.contentLength)
-        {
-            c.req.body = c.in.substr(0, c.req.contentLength);
-            c.state = Connection::READY_TO_RESPOND;
-        }
+        size_t headerPos = c.in.find("\r\n\r\n");
+        size_t bodyStart = headerPos + 4;
+        size_t have = 0;
+        if (c.in.size() > bodyStart) have = c.in.size() - bodyStart;
+
+        if (have < c.expectedBodyLen)
+            return;
+
+        c.req.body = c.in.substr(bodyStart, c.expectedBodyLen);
+
+        std::string remainder;
+        if (c.in.size() > bodyStart + c.expectedBodyLen)
+            remainder = c.in.substr(bodyStart + c.expectedBodyLen);
+
+        c.in = remainder;
+        c.state = Connection::READY_TO_RESPOND;
+    }
+
+    //Simple response for testing ------HERE-------------
+    if (c.state == Connection::READY_TO_RESPOND)
+    {
+        HttpResponse res;
+        res.setStatus(200, "OK");
+        res.setHeader("Content-Type", "text/plain");
+        res.setBody("Hello from Webserv!");
+
+        c.out = res.serialize();
+        c.state = Connection::WRITING_RESPONSE;
     }
 }
+
 
 void Server::processWritable(Connection &c)
 {
