@@ -11,6 +11,7 @@
         "utility": "cpp",
         "vector": "cpp",
         "xtree": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "ctime": "cpp"
     }
 }

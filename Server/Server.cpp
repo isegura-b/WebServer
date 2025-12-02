@@ -10,6 +10,9 @@
 #include <cerrno>
 #include <algorithm>
 #include "../Sockets/ListeningSocket.hpp"
+#include "../HTTP/HttpRequest.hpp"
+#include "../HTTP/HttpParser.hpp"
+#include "../HTTP/HttpResponse.hpp"
 
 // Connection init struct
 
@@ -31,7 +34,8 @@ Server::Server()
     _listenFds.push_back(sfd);
 }
 
-Server::~Server() {
+Server::~Server()
+{
     for (std::size_t i = 0; i < _extraListeners.size(); ++i)
         delete _extraListeners[i];
 }
@@ -41,7 +45,7 @@ Server::Server(const std::vector<int> &ports)
 {
     int sfd = getServerSocket()->getSocket();
     _listenFds.push_back(sfd);
-    for (std::size_t i = 1; i < ports.size(); ++i)      //extra listeners for remaining ports
+    for (std::size_t i = 1; i < ports.size(); ++i) // extra listeners for remaining ports
     {
         ListeningSocket *ls = new ListeningSocket(AF_INET, SOCK_STREAM, 0, ports[i], INADDR_ANY, 10);
         _extraListeners.push_back(ls);
@@ -58,11 +62,12 @@ void Server::acceptNew(int listenFd)
         return;
     }
     int flags = fcntl(cfd, F_GETFL, 0);
-    fcntl(cfd, F_SETFL, flags | O_NONBLOCK);
+    fcntl(cfd, F_SETFL, flags | O_NONBLOCK); // set non-blocking
     _connections.insert(std::make_pair(cfd, Connection(cfd)));
-    struct sockaddr_in lsaddr; socklen_t llen = sizeof(lsaddr);
+    struct sockaddr_in lsaddr;
+    socklen_t llen = sizeof(lsaddr);
     int p = 0;
-    if (::getsockname(listenFd, (struct sockaddr*)&lsaddr, &llen) == 0)
+    if (::getsockname(listenFd, (struct sockaddr *)&lsaddr, &llen) == 0)
         p = ntohs(lsaddr.sin_port);
     std::cout << "[+] Nueva conexión fd=" << cfd << " (http://localhost:" << p << "/)" << std::endl;
 }
@@ -71,39 +76,54 @@ static bool endsWithHeaders(const std::string &s)
 {
     if (s.size() < 4)
         return false;
-    return s.find("\r\n\r\n") != std::string::npos;
+    return s.compare(s.size() - 4, 4, "\r\n\r\n") == 0;
 }
 
 void Server::processReadable(Connection &c)
 {
-    char buf[5000];
-    int r = ::read(c.fd, buf, sizeof(buf));
-    if (r == 0)
+    char buffer[4096];
+    int bytes = ::read(c.fd, buffer, sizeof(buffer));
+
+    if (bytes == 0)
     {
         c.state = Connection::CLOSED;
         return;
     }
-    if (r < 0)
+
+    if (bytes < 0)
     {
         c.state = Connection::CLOSED;
         return;
     }
-    c.in.append(buf, r);
+    c.in.append(buffer, bytes);
     c.lastActivity = std::time(NULL);
-    if (c.state == Connection::READING_HEADERS && endsWithHeaders(c.in))
+
+    // Reading headers
+    if (c.state == Connection::READING_HEADERS)
     {
-        c.state = Connection::READY_TO_RESPOND;
-        const char *body = "Hello, World!";
-        std::string response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length: ";
-        char lenBuf[32];
-        std::sprintf(lenBuf, "%zu", std::strlen(body));
-        response += lenBuf;
-        response += "\r\nConnection: close\r\n\r\n";
-        response += body;
-        c.out = response;
-        c.state = Connection::WRITING_RESPONSE;
+        if (endsWithHeaders(c.in))
+        {
+            if (!HttpParser::parse(c.req, c.in))
+                return; // missing content
+
+            if (c.req.hasBody())
+            {
+                c.state = Connection::READING_BODY;
+                return;
+            }
+
+            c.state = Connection::READY_TO_RESPOND;
+        }
+    }
+
+    // Reading body
+    else if (c.state == Connection::READING_BODY)
+    {
+        if (c.in.size() >= c.req.contentLength)
+        {
+            c.req.body = c.in.substr(0, c.req.contentLength);
+            c.state = Connection::READY_TO_RESPOND;
+        }
     }
 }
 
@@ -127,7 +147,11 @@ void Server::processWritable(Connection &c)
         c.lastActivity = std::time(NULL);
     }
     if (c.out.empty())
-        c.state = Connection::CLOSED;
+    {
+        c.state = Connection::READING_HEADERS; // listo para siguiente request
+        c.in.clear();
+        c.req = HttpRequest();
+    }
 }
 
 void Server::launch()
@@ -146,6 +170,7 @@ void Server::launch()
     while (1)
     {
         std::vector<struct pollfd> pfds;
+        // listeners in pfds vector
         for (std::vector<int>::iterator i = _listenFds.begin(); i != _listenFds.end(); ++i)
         {
             struct pollfd p;
@@ -154,6 +179,7 @@ void Server::launch()
             p.revents = 0;
             pfds.push_back(p);
         }
+        // connections in pfds vector (client)
         for (std::map<int, Connection>::iterator i = _connections.begin(); i != _connections.end(); ++i)
         {
             struct pollfd p;
@@ -173,6 +199,7 @@ void Server::launch()
             continue;
         }
 
+        // handle events
         for (std::size_t i = 0; i < pfds.size(); ++i)
         {
             struct pollfd &pfd = pfds[i];
@@ -193,6 +220,7 @@ void Server::launch()
                 processWritable(conn);
         }
 
+        // Clean up
         std::time_t now = std::time(NULL);
         for (std::map<int, Connection>::iterator i = _connections.begin(); i != _connections.end();)
         {
@@ -216,7 +244,6 @@ void Server::launch()
         }
     }
 }
-
 
 // No multi-port
 void Server::accept() {}

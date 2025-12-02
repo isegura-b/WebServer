@@ -10,7 +10,10 @@ SRC = src/main.cpp \
 	Sockets/SimpleSocket.cpp \
 	Server/SimpleServer.cpp \
 	Server/Server.cpp \
-	config/ConfigParser.cpp
+	config/ConfigParser.cpp \
+	HTTP/HttpRequest.cpp \
+	HTTP/HttpParser.cpp \
+	HTTP/HttpResponse.cpp 
 
 OBJ_DIR = obj
 DEP_DIR = deps
@@ -35,6 +38,9 @@ $(OBJ_DIR)/%.o: Server/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR)/%.o: config/%.cpp | $(OBJ_DIR) $(DEP_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
+
+$(OBJ_DIR)/%.o: HTTP/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR):
