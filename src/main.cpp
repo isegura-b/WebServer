@@ -8,6 +8,7 @@
 int main(int ac, char **av)
 {
     std::vector<int> ports;
+    Config cfg;
 
     if (ac > 2)
     {
@@ -24,7 +25,7 @@ int main(int ac, char **av)
     try
     {
         ConfigParser parser;
-        Config cfg = parser.parse(confPath);
+        cfg = parser.parse(confPath);
 
         // std::cout << "[config] servers: " << cfg.servers.size() << std::endl; //n server count
         for (std::size_t i = 0; i < cfg.servers.size(); ++i)
@@ -88,7 +89,7 @@ int main(int ac, char **av)
         return 1;
     }
 
-    Server server(ports); // multi-port
+    Server server(ports, cfg); // multi-port
     server.launch();
     return 0;
 }

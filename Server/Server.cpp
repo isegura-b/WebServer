@@ -40,8 +40,8 @@ Server::~Server()
         delete _extraListeners[i];
 }
 
-Server::Server(const std::vector<int> &ports)
-    : SimpleServer(AF_INET, SOCK_STREAM, 0, ports.empty() ? 8080 : ports[0], INADDR_ANY, 10)
+Server::Server(const std::vector<int> &ports, const Config &cfg)
+    : SimpleServer(AF_INET, SOCK_STREAM, 0, ports.empty() ? 8080 : ports[0], INADDR_ANY, 10), _config(cfg)
 {
     int sfd = getServerSocket()->getSocket();
     _listenFds.push_back(sfd);
@@ -71,7 +71,6 @@ void Server::acceptNew(int listenFd)
         p = ntohs(lsaddr.sin_port);
     std::cout << "[+] Nueva conexión fd=" << cfd << " (http://localhost:" << p << "/)" << std::endl;
 }
-
 
 void Server::processReadable(Connection &c)
 {
@@ -127,7 +126,8 @@ void Server::processReadable(Connection &c)
         size_t headerPos = c.in.find("\r\n\r\n");
         size_t bodyStart = headerPos + 4;
         size_t have = 0;
-        if (c.in.size() > bodyStart) have = c.in.size() - bodyStart;
+        if (c.in.size() > bodyStart)
+            have = c.in.size() - bodyStart;
 
         if (have < c.expectedBodyLen)
             return;
@@ -142,7 +142,7 @@ void Server::processReadable(Connection &c)
         c.state = Connection::READY_TO_RESPOND;
     }
 
-    //Simple response for testing ------HERE-------------
+    // Simple response for testing ------HERE-------------
     if (c.state == Connection::READY_TO_RESPOND)
     {
         HttpResponse res;
@@ -154,7 +154,6 @@ void Server::processReadable(Connection &c)
         c.state = Connection::WRITING_RESPONSE;
     }
 }
-
 
 void Server::processWritable(Connection &c)
 {
@@ -225,7 +224,7 @@ void Server::launch()
         if (ret < 0)
         {
             perror("poll");
-            continue;
+            break;
         }
 
         // handle events
@@ -251,24 +250,21 @@ void Server::launch()
 
         // Clean up
         std::time_t now = std::time(NULL);
-        for (std::map<int, Connection>::iterator i = _connections.begin(); i != _connections.end();)
+        std::map<int, Connection>::iterator it = _connections.begin();
+        while (it != _connections.end())
         {
-            Connection &c = i->second;
-            bool erase = false;
-            if (c.state == Connection::CLOSED)
-                erase = true;
-            else if (now - c.lastActivity > 30)
-                erase = true;
-            if (erase)
+            Connection &c = it->second;
+
+            if (c.state == Connection::CLOSED || (now - c.lastActivity > 30))
             {
                 ::close(c.fd);
-                std::map<int, Connection>::iterator toErase = i;
-                ++i;
-                _connections.erase(toErase);
+                std::map<int, Connection>::iterator tmp = it;
+                ++it;
+                _connections.erase(tmp);
             }
             else
             {
-                ++i;
+                ++it;
             }
         }
     }

@@ -52,6 +52,14 @@ bool HttpParser::parse(HttpRequest &req, const std::string &raw)
 
     if (raw.size() > pos + 4)
         req.body = raw.substr(pos + 4);
+    if (req.method != "GET" && req.method != "POST" && req.method != "DELETE")
+        return false;
+
+    if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0")
+        return false;
+
+    if (req.path.empty() || req.path[0] != '/')
+        return false;
 
     return true;
 }

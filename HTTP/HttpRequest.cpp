@@ -7,5 +7,5 @@ HttpRequest::HttpRequest()
 
 bool HttpRequest::hasBody()
 {
-    return contentLength > 0;
+    return (headers.count("Content-Length") && contentLength > 0);
 }

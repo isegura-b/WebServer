@@ -3,6 +3,7 @@
 
 #include "SimpleServer.hpp"
 #include "../HTTP/HttpRequest.hpp"
+#include "../config/Config.hpp"
 #include <map>
 #include <vector>
 #include <string>
@@ -41,13 +42,16 @@ private:
     void acceptNew(int listenFd);
     void processReadable(Connection &c);
     void processWritable(Connection &c);
+
     void accept();
     void handle();
     void respond();
 
+    Config _config;
+
 public:
     Server();
-    Server(const std::vector<int> &ports);
+    Server(const std::vector<int> &ports, const Config &cfg);
     ~Server();
 
     void launch();
