@@ -2,6 +2,7 @@
 #define SERVER_HPP
 
 #include "SimpleServer.hpp"
+#include "RequestHandler.hpp"
 #include "../HTTP/HttpRequest.hpp"
 #include "../config/Config.hpp"
 #include <map>
@@ -38,6 +39,8 @@ private:
     std::map<int, Connection> _connections;         // active client connections multiport (key(fd) -> value(Connection struct))
     std::vector<int> _listenFds;                    // listening sockets (saves fds for multi-port in a list)
     std::vector<ListeningSocket *> _extraListeners; // additional listeners we create (ownership)
+	RequestHandler _handler;
+
 
     void acceptNew(int listenFd);
     void processReadable(Connection &c);
@@ -50,7 +53,7 @@ private:
     Config _config;
 
 public:
-    Server();
+    //Server();
     Server(const std::vector<int> &ports, const Config &cfg);
     ~Server();
 

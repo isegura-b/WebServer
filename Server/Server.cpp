@@ -27,12 +27,12 @@ Connection::Connection(int f)
 }
 
 // SimpleServer
-Server::Server()
-    : SimpleServer(AF_INET, SOCK_STREAM, 0, 8080, INADDR_ANY, 10)
-{
-    int sfd = getServerSocket()->getSocket();
-    _listenFds.push_back(sfd);
-}
+//Server::Server()
+//    : SimpleServer(AF_INET, SOCK_STREAM, 0, 8080, INADDR_ANY, 10)
+//{
+//    int sfd = getServerSocket()->getSocket();
+//    _listenFds.push_back(sfd);
+//}
 
 Server::~Server()
 {
@@ -41,14 +41,14 @@ Server::~Server()
 }
 
 Server::Server(const std::vector<int> &ports, const Config &cfg)
-    : SimpleServer(AF_INET, SOCK_STREAM, 0, ports.empty() ? 8080 : ports[0], INADDR_ANY, 10), _config(cfg)
+    : SimpleServer(AF_INET, SOCK_STREAM, 0, ports.empty() ? 8080 : ports[0], INADDR_ANY, 10), _handler(cfg), _config(cfg)
 {
     int sfd = getServerSocket()->getSocket();
     _listenFds.push_back(sfd);
     for (std::size_t i = 1; i < ports.size(); ++i) // extra listeners for remaining ports
     {
         ListeningSocket *ls = new ListeningSocket(AF_INET, SOCK_STREAM, 0, ports[i], INADDR_ANY, 10);
-        _extraListeners.push_back(ls);
+		_extraListeners.push_back(ls);
         _listenFds.push_back(ls->getSocket());
     }
 }
@@ -142,13 +142,18 @@ void Server::processReadable(Connection &c)
         c.state = Connection::READY_TO_RESPOND;
     }
 
-    // Simple response for testing ------HERE-------------
+    // Conecition with request handler
     if (c.state == Connection::READY_TO_RESPOND)
     {
-        HttpResponse res;
-        res.setStatus(200, "OK");
-        res.setHeader("Content-Type", "text/plain");
-        res.setBody("Hello from Webserv!");
+        struct sockaddr_in addr;
+        socklen_t len = sizeof(addr);
+        if (::getsockname(c.fd, (struct sockaddr *)&addr, &len) == -1)
+        {
+            perror("getsockname");
+        }
+        int port = ntohs(addr.sin_port);
+
+        HttpResponse res = _handler.handle(c.req, port);
 
         c.out = res.serialize();
         c.state = Connection::WRITING_RESPONSE;

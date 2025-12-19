@@ -1,7 +1,7 @@
 NAME = webserv
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -fsanitize=address
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 #-fsanitize=address
 
 SRC = src/main.cpp \
 	Sockets/BindSocket.cpp \
@@ -10,6 +10,7 @@ SRC = src/main.cpp \
 	Sockets/SimpleSocket.cpp \
 	Server/SimpleServer.cpp \
 	Server/Server.cpp \
+	Server/RequestHandler.cpp \
 	config/ConfigParser.cpp \
 	HTTP/HttpRequest.cpp \
 	HTTP/HttpParser.cpp \

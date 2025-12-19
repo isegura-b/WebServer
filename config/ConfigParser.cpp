@@ -190,7 +190,7 @@ Config ConfigParser::parse(const std::string &path)
             }
             else if (starts_with(line, "client_max_body_size "))
             {
-                std::string s = trim(line.substr(22));
+                std::string s = trim(line.substr(21));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
                 current.clientMaxBodySize = parse_size_with_suffix(s);
