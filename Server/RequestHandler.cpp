@@ -33,22 +33,9 @@ HttpResponse RequestHandler::handle(const HttpRequest& req, int port) {
 		return generateError(404);
 	}
 
-	std::cout << "[DEBUG] Path solicitado: " << req.path << std::endl;
-	std::cout << "[DEBUG] Location elegida: " << loc->path << std::endl;
-	std::cout << "[DEBUG] Métodos permitidos en esta location: ";
-	for (size_t i = 0; i < loc->allowedMethods.size(); ++i)
-	    std::cout << loc->allowedMethods[i] << " ";
-	std::cout << std::endl;
-	std::cout << "[DEBUG] Límite size Server: " << server->clientMaxBodySize << std::endl;
 	if (!isMethodAllowed(loc, req.method)) {
 		return generateError(405);
 	}
-
-	// ...
-    std::cout << "--- DEBUG SIZE ---" << std::endl;
-    std::cout << "Body Size real: " << req.body.size() << std::endl;
-    std::cout << "Limit Configurado: " << server->clientMaxBodySize << std::endl;
-    std::cout << "------------------" << std::endl;
 
 	if (server->clientMaxBodySize > 0 && req.body.size() > server->clientMaxBodySize) {
 		return generateError(413);
