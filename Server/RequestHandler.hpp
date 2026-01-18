@@ -21,11 +21,11 @@ private:
 	bool fileExists(const std::string& path);
 	std::string readFile(const std::string& path);
 
-	HttpResponse handleGet(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath);
-	HttpResponse handlePost(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath);
-	HttpResponse handleDelete(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath);
+	HttpResponse handleGet(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath, const ServerBlock* server);
+	HttpResponse handlePost(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath, const ServerBlock* server);
+	HttpResponse handleDelete(const HttpRequest& req, const LocationBlock* loc, const std::string& fullPath, const ServerBlock* server);
 
-	HttpResponse generateError(int code);
+	HttpResponse generateError(int code, const ServerBlock* server);
 
 public:
 	RequestHandler(const Config& cfg);

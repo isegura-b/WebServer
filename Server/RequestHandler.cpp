@@ -24,21 +24,21 @@ HttpResponse RequestHandler::handle(const HttpRequest& req, int port) {
 
 	if (!server) {
 		std::cout << "No server found for port " << port << std::endl;
-		return generateError(400);
+		return generateError(400, NULL);
 	}
 
 	const LocationBlock* loc = findBestLocation(server, req.path);
 	if (!loc) {
 		std::cout << "No location found for path: " << req.path << std::endl;
-		return generateError(404);
+		return generateError(404, server);
 	}
 
 	if (!isMethodAllowed(loc, req.method)) {
-		return generateError(405);
+		return generateError(405, server);
 	}
 
 	if (server->clientMaxBodySize > 0 && req.body.size() > server->clientMaxBodySize) {
-		return generateError(413);
+		return generateError(413, server);
 	}
 	std::string docRoot = loc->root;
 	if (docRoot.empty()) {
@@ -47,16 +47,16 @@ HttpResponse RequestHandler::handle(const HttpRequest& req, int port) {
 
 	std::string fullPath = docRoot + req.path;
 
-	if (req.method == "GET") return handleGet(req, loc, fullPath);
-	if (req.method == "POST") return handlePost(req, loc, fullPath);
-	if (req.method == "DELETE") return handleDelete(req, loc, fullPath);
+	if (req.method == "GET") return handleGet(req, loc, fullPath, server);
+	if (req.method == "POST") return handlePost(req, loc, fullPath, server);
+	if (req.method == "DELETE") return handleDelete(req, loc, fullPath, server);
 
-	return generateError(501);
+	return generateError(501, server);
 }
 
 // GET
 
-HttpResponse RequestHandler::handleGet(const HttpRequest& req, const LocationBlock* loc, const std::string& path) {
+HttpResponse RequestHandler::handleGet(const HttpRequest& req, const LocationBlock* loc, const std::string& path, const ServerBlock* server) {
 	HttpResponse res;
 	std::string finalPath = path;
 
@@ -68,7 +68,7 @@ HttpResponse RequestHandler::handleGet(const HttpRequest& req, const LocationBlo
 			std::string html = generateAutoindex(finalPath, req.path);
 
 			if (html.empty()) 
-				return generateError(500); 
+				return generateError(500, server); 
 
 			res.setBody(html);
 			res.setHeader("Content-Type", "text/html");
@@ -77,12 +77,12 @@ HttpResponse RequestHandler::handleGet(const HttpRequest& req, const LocationBlo
 			return res;
 		}
 		else {
-			return generateError(403); 
+			return generateError(403, server); 
 		}
 	}
 
 	if (!fileExists(finalPath)) 
-		return generateError(404);
+		return generateError(404, server);
 
 	try {
 		std::string content = readFile(finalPath);
@@ -91,14 +91,14 @@ HttpResponse RequestHandler::handleGet(const HttpRequest& req, const LocationBlo
 		res.setStatus(200, "OK");
 	}
 	catch (...) {
-		return generateError(500); // Error interno al leer
+		return generateError(500, server); // Error interno al leer
 	}
 	return res;
 }
 
 // POST
 
-HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBlock* loc, const std::string& path)
+HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBlock* loc, const std::string& path, const ServerBlock* server)
 {
 	(void)path;
 	std::string targetDir = loc->uploadStore.empty() ? loc->root : loc->uploadStore;
@@ -111,7 +111,7 @@ HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBl
 
 	std::ofstream file(savePath.c_str(), std::ios::binary);
 	if (!file) 
-		return generateError(500);
+		return generateError(500, server);
 
 	file << req.body;
 	file.close();
@@ -124,16 +124,16 @@ HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBl
 
 // DELETE
 
-HttpResponse RequestHandler::handleDelete(const HttpRequest& req, const LocationBlock* loc, const std::string& path)
+HttpResponse RequestHandler::handleDelete(const HttpRequest& req, const LocationBlock* loc, const std::string& path, const ServerBlock* server)
 {
 	(void)req; (void)loc; 
 	HttpResponse res;
 
 	if (!fileExists(path))
-		return generateError(404);
+		return generateError(404, server);
 
 	if (std::remove(path.c_str()) != 0) 
-		return generateError(500); 
+		return generateError(500, server); 
 
 	res.setStatus(204, "No Content"); 
 	return res;
@@ -214,9 +214,26 @@ std::string RequestHandler::getContentType(const std::string& path) {
 	return "text/plain"; // Default 
 }
 
-HttpResponse RequestHandler::generateError(int code) {
+HttpResponse RequestHandler::generateError(int code, const ServerBlock* server) {
 	HttpResponse res;
 	res.setStatus(code, "Error");
+
+	if (server) {
+		std::map<int, std::string>::const_iterator it = server->errorPages.find(code);
+		if (it != server->errorPages.end()) {
+			const std::string& errorPath = it->second;
+			if (fileExists(errorPath)) {
+				try {
+					std::string content = readFile(errorPath);
+					res.setBody(content);
+					res.setHeader("Content-Type", getContentType(errorPath));
+					return res;
+				}
+				catch (...) {
+				}
+			}
+		}
+	}
 
 	std::stringstream ss;
 	ss << code;
@@ -226,31 +243,110 @@ HttpResponse RequestHandler::generateError(int code) {
 	return res;
 }
 
-std::string RequestHandler::generateAutoindex(const std::string& path, const std::string& requestTarget) {
-	std::string html = "<html><body><h1>Index of " + requestTarget + "</h1><ul>";
+std::string RequestHandler::generateAutoindex(const std::string& path,
+                                             const std::string& requestTarget)
+{
+    std::string html;
 
-	DIR* dir = opendir(path.c_str());
-	if (dir == NULL) {
-		return ""; 
-	}
+    html += "<!DOCTYPE html><html lang=\"es\"><head>";
+    html += "<meta charset=\"utf-8\">";
+    html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+    html += "<title>Index of " + requestTarget + "</title>";
 
-	struct dirent* entry;
+    html += "<style>";
+    html += "html,body{height:100%;}";
+    html += "body{margin:0;min-height:100vh;padding:24px;"
+            "font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;"
+            "color:rgba(255,255,255,.92);"
+            "background-color:#0b1020;"
+            "background-image:"
+            "radial-gradient(900px 500px at 10% 10%, rgba(91,195,255,.25), transparent 55%),"
+            "radial-gradient(700px 500px at 90% 80%, rgba(176,91,255,.2), transparent 55%);"
+            "background-repeat:no-repeat;"
+            "background-attachment:fixed;"
+            "background-size:cover;"
+            "}";
 
-	while ((entry = readdir(dir)) != NULL) {
-		std::string name = entry->d_name;
-		if (name == ".") 
-			continue;
+    html += ".card{max-width:900px;margin:24px auto 0 auto;padding:20px;"
+            "background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));"
+            "border:1px solid rgba(255,255,255,.12);border-radius:18px;"
+            "box-shadow:0 20px 60px rgba(0,0,0,.35);}";
 
-		std::string href = requestTarget;
-		if (href.empty() || href[href.size() - 1] != '/') 
-			href += "/";
-		href += name;
+    html += "h1{margin:0 0 6px;font-size:28px;}";
+    html += "p{margin:0 0 16px;color:rgba(255,255,255,.65);}";
 
-		html += "<li><a href=\"" + href + "\">" + name + "</a></li>";
-	}
+    html += "ul{list-style:none;margin:0;padding:0;display:grid;gap:12px;}";
 
-	closedir(dir);
+    html += "a.item{display:flex;justify-content:space-between;align-items:center;"
+            "padding:12px 14px;border-radius:14px;text-decoration:none;"
+            "color:inherit;border:1px solid rgba(255,255,255,.12);"
+            "background:rgba(255,255,255,.04);"
+            "transition:transform .15s ease,background .15s ease,border-color .15s ease;}";
 
-	html += "</ul></body></html>";
-	return html;
+    html += "a.item:hover{transform:translateY(-1px);"
+            "background:rgba(255,255,255,.08);"
+            "border-color:rgba(255,255,255,.2);}";
+
+    html += ".left{display:flex;gap:10px;align-items:center;}";
+
+    html += ".tag{font-size:12px;color:rgba(255,255,255,.65);"
+            "border:1px solid rgba(255,255,255,.12);"
+            "padding:4px 8px;border-radius:999px;}";
+
+    html += "</style></head><body>";
+
+    html += "<div class=\"card\">";
+    html += "<h1>📂 " + requestTarget + "</h1>";
+    html += "<ul>";
+
+    DIR* dir = opendir(path.c_str());
+    if (!dir)
+        return "";
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        std::string name = entry->d_name;
+
+        if (name == "." || name == "..")
+            continue;
+
+        std::string href = requestTarget;
+        if (href.empty() || href[href.size() - 1] != '/')
+            href += "/";
+        href += name;
+
+        std::string diskPath = path;
+        if (!diskPath.empty() && diskPath[diskPath.size() - 1] != '/')
+            diskPath += "/";
+        diskPath += name;
+
+        bool isDir = isDirectory(diskPath);
+
+        std::string icon = "📄";
+        if (isDir)
+            icon = "📁";
+        else if (name.size() >= 4 &&
+                (name.rfind(".png") != std::string::npos ||
+                 name.rfind(".jpg") != std::string::npos ||
+                 name.rfind(".jpeg") != std::string::npos ||
+                 name.rfind(".gif") != std::string::npos))
+            icon = "🖼️";
+
+        std::string tag = isDir ? "DIR" : "FILE";
+
+        html += "<li>";
+        html += "<a class=\"item\" href=\"" + href + "\">";
+        html += "<span class=\"left\">" + icon + " " + name + "</span>";
+        html += "<span class=\"tag\">" + tag + "</span>";
+        html += "</a>";
+        html += "</li>";
+    }
+
+    closedir(dir);
+
+    html += "</ul>";
+    html += "</div></body></html>";
+
+    return html;
 }

@@ -1,10 +1,240 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Mi WebServer</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Landing de prueba para Webserv (C++98): rutas, estáticos, autoindex y uploads." />
+
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: rgba(255, 255, 255, 0.06);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.68);
+      --border: rgba(255, 255, 255, 0.12);
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 15% 10%, rgba(91, 195, 255, 0.28), transparent 55%),
+        radial-gradient(900px 500px at 85% 20%, rgba(176, 91, 255, 0.22), transparent 50%),
+        radial-gradient(700px 500px at 50% 90%, rgba(91, 255, 188, 0.14), transparent 55%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 28px 18px;
+    }
+
+    .wrap {
+      width: min(980px, 100%);
+      display: grid;
+      gap: 18px;
+    }
+
+    header {
+      padding: 22px 22px 18px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .badge {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.2px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: rgba(91, 255, 188, 0.85);
+      box-shadow: 0 0 18px rgba(91, 255, 188, 0.55);
+    }
+
+    h1 {
+      margin: 12px 0 6px;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.08;
+      letter-spacing: -0.8px;
+    }
+
+    p.lead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.55;
+      max-width: 70ch;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 12;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    @media (min-width: 820px) {
+      .card.half { grid-column: span 6; }
+      .card.third { grid-column: span 4; }
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: -0.2px;
+    }
+
+    .small {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .links {
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+    }
+
+    .link:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.18);
+    }
+
+    .pill {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.02);
+      white-space: nowrap;
+    }
+
+    code, .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    pre {
+      margin: 12px 0 0;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      overflow: auto;
+      color: rgba(255,255,255,0.88);
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 0 0;
+    }
+  </style>
 </head>
+
 <body>
-    <h1>Hola desde Webserv!</h1>
-    <p>Esta es la página principal.</p>
+  <main class="wrap">
+    <header>
+      <span class="badge"><span class="dot"></span> Webserv online · HTTP/1.1</span>
+      <h1>Hola desde el servidor 👋</h1>
+      
+    </header>
+
+    <section class="grid">
+      <article class="card half">
+        <h2>Rutas de prueba</h2>
+        <ul class="links">
+          <li>
+            <a class="link" href="/index.html">
+              <span>🏠 Home</span>
+              <span class="pill">GET</span>
+            </a>
+          </li>
+          <li>
+            <a class="link" href="/uploads/">
+              <span>📂 Uploads</span>
+              <span class="pill">GET</span>
+            </a>
+          </li>
+          <li>
+            <a class="link" href="/uploads/testimg.png">
+              <span>🖼️ testimg.png</span>
+              <span class="pill">GET</span>
+            </a>
+          </li>
+          <li>
+            <a class="link" href="/no-existe">
+              <span>🚫 404 (ruta inexistente)</span>
+              <span class="pill">GET</span>
+            </a>
+          </li>
+        </ul>
+      </article>
+
+      <article class="card half">
+        <h2>Comandos útiles</h2>
+        <p class="small">Copia/pega para testear rápido desde terminal.</p>
+
+        <pre><code># GET (ver headers y status)
+curl -v http://localhost:8080/index.html -o /dev/null
+
+# HEAD (curl -I) - si no lo soportas, debería responder 405/501 pero no colgarse
+curl -I http://localhost:8080/index.html
+
+# Stress test básico
+siege -c 10 -r 50 http://localhost:8080/index.html</code></pre>
+      </article>
+    </section>
+  </main>
 </body>
 </html>
