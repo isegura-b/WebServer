@@ -276,6 +276,3 @@ void Server::launch()
 }
 
 // No multi-port
-void Server::accept() {}
-void Server::handle() {}
-void Server::respond() {}

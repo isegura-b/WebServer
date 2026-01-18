@@ -46,10 +46,6 @@ private:
     void processReadable(Connection &c);
     void processWritable(Connection &c);
 
-    void accept();
-    void handle();
-    void respond();
-
     Config _config;
 
 public:
