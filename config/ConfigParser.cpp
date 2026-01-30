@@ -269,7 +269,30 @@ Config ConfigParser::parse(const std::string &path)
                 std::string s = trim(line.substr(14));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
-                currentLoc.cgiExtension = s;
+                std::vector<std::string> toks = split_ws(s);
+                if (toks.size() >= 2)
+                {
+                    currentLoc.cgiPass[toks[0]] = toks[1];
+                }
+                else
+                {
+                    throw std::runtime_error("cgi_extension requires: <ext> <interpreter>");
+                }
+            }
+            else if (starts_with(line, "cgi_pass "))
+            {
+                std::string s = trim(line.substr(9));
+                if (!s.empty() && s[s.size() - 1] == ';')
+                    s.erase(s.size() - 1);
+                std::vector<std::string> toks = split_ws(s);
+                if (toks.size() >= 2)
+                {
+                    currentLoc.cgiPass[toks[0]] = toks[1];
+                }
+                else
+                {
+                    throw std::runtime_error("cgi_pass requires: <ext> <interpreter>");
+                }
             }
             else
             {

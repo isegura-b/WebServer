@@ -8,6 +8,66 @@
 #include <cstdio> 
 #include <unistd.h>
 
+static std::string toUpperUnderscore(const std::string& s)
+{
+	std::string out;
+	for (size_t i = 0; i < s.size(); ++i)
+	{
+		char c = s[i];
+		if (c >= 'a' && c <= 'z')
+			c = static_cast<char>(c - 'a' + 'A');
+		if (c == '-')
+			c = '_';
+		out.push_back(c);
+	}
+	return out;
+}
+
+static std::string toStringSize(size_t v)
+{
+	std::ostringstream ss;
+	ss << v;
+	return ss.str();
+}
+
+static void splitPathQuery(const std::string& rawPath, std::string& pathOnly, std::string& query)
+{
+	size_t qpos = rawPath.find('?');
+	if (qpos == std::string::npos)
+	{
+		pathOnly = rawPath;
+		query.clear();
+	}
+	else
+	{
+		pathOnly = rawPath.substr(0, qpos);
+		query = rawPath.substr(qpos + 1);
+	}
+}
+
+static std::string dirnameOf(const std::string& path)
+{
+	size_t pos = path.find_last_of('/');
+	if (pos == std::string::npos)
+		return ".";
+	if (pos == 0)
+		return "/";
+	return path.substr(0, pos);
+}
+
+static std::string makeAbsolutePath(const std::string& path)
+{
+	if (!path.empty() && path[0] == '/')
+		return path;
+	char buf[4096];
+	if (::getcwd(buf, sizeof(buf)) == NULL)
+		return path;
+	std::string base(buf);
+	if (!base.empty() && base[base.size() - 1] != '/')
+		base += "/";
+	return base + path;
+}
+
 static bool isMethodAllowed(const LocationBlock* loc, const std::string& method) {
 	for (size_t i = 0; i < loc->allowedMethods.size(); ++i) {
 		if (loc->allowedMethods[i] == method)
@@ -27,7 +87,11 @@ HttpResponse RequestHandler::handle(const HttpRequest& req, int port) {
 		return generateError(400, NULL);
 	}
 
-	const LocationBlock* loc = findBestLocation(server, req.path);
+	std::string cleanPath;
+	std::string query;
+	splitPathQuery(req.path, cleanPath, query);
+
+	const LocationBlock* loc = findBestLocation(server, cleanPath);
 	if (!loc) {
 		std::cout << "No location found for path: " << req.path << std::endl;
 		return generateError(404, server);
@@ -45,7 +109,7 @@ HttpResponse RequestHandler::handle(const HttpRequest& req, int port) {
 		docRoot = server->root; // If loc has no root, use the server root
 	}
 
-	std::string fullPath = docRoot + req.path;
+	std::string fullPath = docRoot + cleanPath;
 
 	if (req.method == "GET") return handleGet(req, loc, fullPath, server);
 	if (req.method == "POST") return handlePost(req, loc, fullPath, server);
@@ -103,7 +167,10 @@ HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBl
 	(void)path;
 	std::string targetDir = loc->uploadStore.empty() ? loc->root : loc->uploadStore;
 
-	std::string fileName = req.path.substr(req.path.find_last_of("/") + 1);
+	std::string cleanPath;
+	std::string query;
+	splitPathQuery(req.path, cleanPath, query);
+	std::string fileName = cleanPath.substr(cleanPath.find_last_of("/") + 1);
 	if (fileName.empty()) 
 		fileName = "uploaded_file";
 
@@ -120,6 +187,151 @@ HttpResponse RequestHandler::handlePost(const HttpRequest& req, const LocationBl
 	res.setStatus(201, "Created");
 	res.setBody("File uploaded successfully");
 	return res;
+}
+
+HttpResponse RequestHandler::errorForPort(int code, int port)
+{
+	HttpRequest dummy;
+	const ServerBlock* server = findBestServer(dummy, port);
+	return generateError(code, server);
+}
+
+static bool matchCgiExtension(const std::map<std::string, std::string>& cgiPass,
+                              const std::string& uriPath,
+                              std::string& ext,
+                              size_t& extPos)
+{
+	size_t lastSlash = uriPath.find_last_of('/');
+	if (lastSlash == std::string::npos)
+		lastSlash = 0;
+	else
+		lastSlash += 1;
+	size_t bestLen = 0;
+	size_t bestPos = std::string::npos;
+	std::string bestExt;
+	for (std::map<std::string, std::string>::const_iterator it = cgiPass.begin(); it != cgiPass.end(); ++it)
+	{
+		const std::string& e = it->first;
+		size_t pos = uriPath.find(e, lastSlash);
+		if (pos == std::string::npos)
+			continue;
+		if (pos < lastSlash)
+			continue;
+		if (e.size() > bestLen)
+		{
+			bestLen = e.size();
+			bestPos = pos;
+			bestExt = e;
+		}
+	}
+	if (bestPos == std::string::npos)
+		return false;
+	ext = bestExt;
+	extPos = bestPos;
+	return true;
+}
+
+CgiJob::Decision RequestHandler::buildCgiJob(const HttpRequest& req, int port, CgiJob& job, HttpResponse& errorRes)
+{
+	const ServerBlock* server = findBestServer(req, port);
+	if (!server)
+	{
+		errorRes = generateError(400, NULL);
+		return CgiJob::CGI_ERROR;
+	}
+
+	std::string cleanPath;
+	std::string query;
+	splitPathQuery(req.path, cleanPath, query);
+
+	const LocationBlock* loc = findBestLocation(server, cleanPath);
+	if (!loc)
+	{
+		errorRes = generateError(404, server);
+		return CgiJob::CGI_ERROR;
+	}
+
+	if (!isMethodAllowed(loc, req.method))
+	{
+		errorRes = generateError(405, server);
+		return CgiJob::CGI_ERROR;
+	}
+
+	if (server->clientMaxBodySize > 0 && req.body.size() > server->clientMaxBodySize)
+	{
+		errorRes = generateError(413, server);
+		return CgiJob::CGI_ERROR;
+	}
+
+	if (loc->cgiPass.empty())
+		return CgiJob::CGI_NO;
+
+	std::string ext;
+	size_t extPos = std::string::npos;
+	if (!matchCgiExtension(loc->cgiPass, cleanPath, ext, extPos))
+		return CgiJob::CGI_NO;
+
+	std::string scriptName = cleanPath.substr(0, extPos + ext.size());
+	std::string pathInfo = "";
+	if (cleanPath.size() > extPos + ext.size())
+		pathInfo = cleanPath.substr(extPos + ext.size());
+
+	std::string docRoot = loc->root.empty() ? server->root : loc->root;
+	std::string scriptFilename = docRoot + scriptName;
+	scriptFilename = makeAbsolutePath(scriptFilename);
+
+	if (!fileExists(scriptFilename))
+	{
+		errorRes = generateError(404, server);
+		return CgiJob::CGI_ERROR;
+	}
+	if (isDirectory(scriptFilename))
+	{
+		errorRes = generateError(403, server);
+		return CgiJob::CGI_ERROR;
+	}
+
+	std::map<std::string, std::string>::const_iterator it = loc->cgiPass.find(ext);
+	if (it == loc->cgiPass.end() || it->second.empty())
+	{
+		errorRes = generateError(500, server);
+		return CgiJob::CGI_ERROR;
+	}
+
+	job.interpreter = it->second;
+	job.scriptFilename = scriptFilename;
+	job.scriptName = scriptName;
+	job.pathInfo = pathInfo;
+	job.queryString = query;
+	job.cwd = dirnameOf(scriptFilename);
+
+	job.env.clear();
+	job.env["REQUEST_METHOD"] = req.method;
+	job.env["QUERY_STRING"] = query;
+	job.env["SCRIPT_NAME"] = scriptName;
+	job.env["SCRIPT_FILENAME"] = scriptFilename;
+	if (!pathInfo.empty())
+		job.env["PATH_INFO"] = pathInfo;
+	job.env["SERVER_PROTOCOL"] = req.version;
+	job.env["GATEWAY_INTERFACE"] = "CGI/1.1";
+	if (!server->serverName.empty())
+		job.env["SERVER_NAME"] = server->serverName;
+	else
+		job.env["SERVER_NAME"] = "localhost";
+	job.env["SERVER_PORT"] = toStringSize(static_cast<size_t>(server->listenPort));
+
+	if (req.headers.count("Content-Type"))
+		job.env["CONTENT_TYPE"] = req.headers.find("Content-Type")->second;
+	if (!req.body.empty())
+		job.env["CONTENT_LENGTH"] = toStringSize(req.body.size());
+
+	for (std::map<std::string, std::string>::const_iterator hit = req.headers.begin(); hit != req.headers.end(); ++hit)
+	{
+		std::string key = toUpperUnderscore(hit->first);
+		job.env["HTTP_" + key] = hit->second;
+	}
+
+	return CgiJob::CGI_YES;
 }
 
 // DELETE

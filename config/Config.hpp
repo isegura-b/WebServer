@@ -14,7 +14,7 @@ struct LocationBlock
     std::vector<std::string> allowedMethods; // HTTP methods: GET, POST, DELETE
     std::string uploadStore;                 // storage path for uploads
     std::string redirect;                    // ex "301 /newpath"
-    std::string cgiExtension;                // ex ".php" or ".py"
+    std::map<std::string, std::string> cgiPass; // extension -> interpreter path
 
     LocationBlock() : autoindex(false) {}
 };
