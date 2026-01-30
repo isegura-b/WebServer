@@ -1,6 +1,6 @@
 #include "Cgi.hpp"
-#include "Server.hpp"
-#include "RequestHandler.hpp"
+#include "../Server/Server.hpp"
+#include "../Server/RequestHandler.hpp"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>

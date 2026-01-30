@@ -193,14 +193,14 @@ CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, CgiJo
         return CgiJob::CGI_NO;
 
     std::string ext;
-    size_t extPos = std::string::npos;
-    if (!matchCgiExtension(loc->cgiPass, cleanPath, ext, extPos))
+    size_t ext_pos = std::string::npos;
+    if (!matchCgiExtension(loc->cgiPass, cleanPath, ext, ext_pos))
         return CgiJob::CGI_NO;
 
-    std::string scriptName = cleanPath.substr(0, extPos + ext.size());
+    std::string scriptName = cleanPath.substr(0, ext_pos + ext.size());
     std::string pathInfo = "";
-    if (cleanPath.size() > extPos + ext.size())
-        pathInfo = cleanPath.substr(extPos + ext.size());
+    if (cleanPath.size() > ext_pos + ext.size())
+        pathInfo = cleanPath.substr(ext_pos + ext.size());
 
     std::string docRoot = loc->root.empty() ? server->root : loc->root;
     std::string scriptFilename = docRoot + scriptName;

@@ -11,6 +11,31 @@ static bool starts_with(const std::string &s, const std::string &p)
     return s.compare(0, p.size(), p) == 0;
 }
 
+class ServerDirectiveFlags
+{
+public:
+    bool listenSet;
+    bool rootSet;
+    bool indexSet;
+    bool serverNameSet;
+    bool maxBodySet;
+    ServerDirectiveFlags() : listenSet(false), rootSet(false), indexSet(false), serverNameSet(false), maxBodySet(false) {}
+    void reset() { listenSet = rootSet = indexSet = serverNameSet = maxBodySet = false; }
+};
+
+class LocationDirectiveFlags
+{
+public:
+    bool rootSet;
+    bool indexSet;
+    bool autoindexSet;
+    bool methodsSet;
+    bool uploadStoreSet;
+    bool redirectSet;
+    LocationDirectiveFlags() : rootSet(false), indexSet(false), autoindexSet(false), methodsSet(false), uploadStoreSet(false), redirectSet(false) {}
+    void reset() { rootSet = indexSet = autoindexSet = methodsSet = uploadStoreSet = redirectSet = false; }
+};
+
 std::string ConfigParser::trim(const std::string &s)
 {
     size_t a = 0, b = s.size();
@@ -96,6 +121,8 @@ Config ConfigParser::parse(const std::string &path)
         IN_LOCATION
     } state = OUTSIDE;
     LocationBlock currentLoc;
+    ServerDirectiveFlags sFlags;
+    LocationDirectiveFlags lFlags;
 
     while (std::getline(in, line))
     {
@@ -109,6 +136,7 @@ Config ConfigParser::parse(const std::string &path)
             {
                 current = ServerBlock();
                 state = IN_SERVER;
+                sFlags.reset();
             }
             else
             {
@@ -142,6 +170,7 @@ Config ConfigParser::parse(const std::string &path)
                 currentLoc = LocationBlock();
                 currentLoc.path = rest;
                 state = IN_LOCATION;
+                lFlags.reset();
                 continue;
             }
 
@@ -151,49 +180,65 @@ Config ConfigParser::parse(const std::string &path)
                 std::string s = trim(line.substr(7));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
-                size_t colon = s.find(':');
-                if (colon == std::string::npos)
+                if (sFlags.listenSet)
+                    throw std::runtime_error("duplicate directive 'listen' in server block");
+                size_t colonPos = s.find(':');
+                if (colonPos == std::string::npos)
                 {
                     current.listenHost = "0.0.0.0";
                     std::string p = s;
                     current.listenPort = std::atoi(p.c_str());
                     if (current.listenPort <= 0 || current.listenPort >= 65536)
                         throw std::runtime_error("invalid listen port: " + p);
+                    sFlags.listenSet = true;
                     continue;
                 }
-                current.listenHost = s.substr(0, colon);
-                std::string p = s.substr(colon + 1);
+                current.listenHost = s.substr(0, colonPos);
+                std::string p = s.substr(colonPos + 1);
                 current.listenPort = std::atoi(p.c_str());
                 if (current.listenPort <= 0 || current.listenPort >= 65536)
                     throw std::runtime_error("invalid listen port: " + p);
+                sFlags.listenSet = true;
             }
             else if (starts_with(line, "root "))
             {
                 std::string s = trim(line.substr(5));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (sFlags.rootSet)
+                    throw std::runtime_error("duplicate directive 'root' in server block");
                 current.root = s;
+                sFlags.rootSet = true;
             }
             else if (starts_with(line, "index "))
             {
                 std::string s = trim(line.substr(6));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (sFlags.indexSet)
+                    throw std::runtime_error("duplicate directive 'index' in server block");
                 current.index = s;
+                sFlags.indexSet = true;
             }
             else if (starts_with(line, "server_name "))
             {
                 std::string s = trim(line.substr(12));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (sFlags.serverNameSet)
+                    throw std::runtime_error("duplicate directive 'server_name' in server block");
                 current.serverName = s;
+                sFlags.serverNameSet = true;
             }
             else if (starts_with(line, "client_max_body_size "))
             {
                 std::string s = trim(line.substr(21));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (sFlags.maxBodySet)
+                    throw std::runtime_error("duplicate directive 'client_max_body_size' in server block");
                 current.clientMaxBodySize = parse_size_with_suffix(s);
+                sFlags.maxBodySet = true;
             }
             else if (starts_with(line, "error_page "))
             {
@@ -205,6 +250,8 @@ Config ConfigParser::parse(const std::string &path)
                 {
                     int code = std::atoi(toks[0].c_str());
                     std::string pathv = toks[1];
+                    if (current.errorPages.count(code))
+                        throw std::runtime_error("duplicate error_page for code " + std::string(toks[0]));
                     current.errorPages[code] = pathv;
                 }
             }
@@ -218,6 +265,11 @@ Config ConfigParser::parse(const std::string &path)
             {
                 if (currentLoc.path.empty())
                     throw std::runtime_error("location without path");
+                for (size_t i = 0; i < current.locations.size(); ++i)
+                {
+                    if (current.locations[i].path == currentLoc.path)
+                        throw std::runtime_error("duplicate location path: " + currentLoc.path);
+                }
                 current.locations.push_back(currentLoc);
                 state = IN_SERVER;
                 continue;
@@ -227,42 +279,60 @@ Config ConfigParser::parse(const std::string &path)
                 std::string s = trim(line.substr(5));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.rootSet)
+                    throw std::runtime_error("duplicate directive 'root' in location block");
                 currentLoc.root = s;
+                lFlags.rootSet = true;
             }
             else if (starts_with(line, "index "))
             {
                 std::string s = trim(line.substr(6));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.indexSet)
+                    throw std::runtime_error("duplicate directive 'index' in location block");
                 currentLoc.index = s;
+                lFlags.indexSet = true;
             }
             else if (starts_with(line, "autoindex "))
             {
                 std::string s = trim(line.substr(10));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.autoindexSet)
+                    throw std::runtime_error("duplicate directive 'autoindex' in location block");
                 currentLoc.autoindex = (s == "on" || s == "ON" || s == "1");
+                lFlags.autoindexSet = true;
             }
             else if (starts_with(line, "methods "))
             {
                 std::string s = trim(line.substr(8));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.methodsSet)
+                    throw std::runtime_error("duplicate directive 'methods' in location block");
                 currentLoc.allowedMethods = split_ws(s);
+                lFlags.methodsSet = true;
             }
             else if (starts_with(line, "upload_store "))
             {
                 std::string s = trim(line.substr(13));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.uploadStoreSet)
+                    throw std::runtime_error("duplicate directive 'upload_store' in location block");
                 currentLoc.uploadStore = s;
+                lFlags.uploadStoreSet = true;
             }
             else if (starts_with(line, "return "))
             {
                 std::string s = trim(line.substr(7));
                 if (!s.empty() && s[s.size() - 1] == ';')
                     s.erase(s.size() - 1);
+                if (lFlags.redirectSet)
+                    throw std::runtime_error("duplicate directive 'return' in location block");
                 currentLoc.redirect = s;
+                lFlags.redirectSet = true;
             }
             else if (starts_with(line, "cgi_extension "))
             {
@@ -272,6 +342,8 @@ Config ConfigParser::parse(const std::string &path)
                 std::vector<std::string> toks = split_ws(s);
                 if (toks.size() >= 2)
                 {
+                    if (currentLoc.cgiPass.count(toks[0]))
+                        throw std::runtime_error("duplicate cgi mapping for extension " + toks[0]);
                     currentLoc.cgiPass[toks[0]] = toks[1];
                 }
                 else
@@ -287,6 +359,8 @@ Config ConfigParser::parse(const std::string &path)
                 std::vector<std::string> toks = split_ws(s);
                 if (toks.size() >= 2)
                 {
+                    if (currentLoc.cgiPass.count(toks[0]))
+                        throw std::runtime_error("duplicate cgi mapping for extension " + toks[0]);
                     currentLoc.cgiPass[toks[0]] = toks[1];
                 }
                 else

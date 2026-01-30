@@ -27,53 +27,9 @@ int main(int ac, char **av)
         ConfigParser parser;
         cfg = parser.parse(confPath);
 
-        // std::cout << "[config] servers: " << cfg.servers.size() << std::endl; //n server count
         for (std::size_t i = 0; i < cfg.servers.size(); ++i)
         {
-            /* std::cout << "test parse config" << std::endl;
-                        const ServerBlock &sb = cfg.servers[i];
-                        std::cout << "[config] server #" << i
-                                  << " listen=" << (sb.listenHost.empty() ? std::string("0.0.0.0") : sb.listenHost)
-                                  << ":" << sb.listenPort
-                                  << " root=" << sb.root
-                                  << " index=" << sb.index
-                                  << " server_name=" << sb.serverName
-                                  << " client_max_body_size=" << sb.clientMaxBodySize
-                                  << std::endl;
 
-                        if (!sb.errorPages.empty()) {
-                            std::cout << "[config]  error_pages:" << std::endl;
-                            std::map<int, std::string>::const_iterator it = sb.errorPages.begin();
-                            for (; it != sb.errorPages.end(); ++it) {
-                                std::cout << "[config]   " << it->first << " => " << it->second << std::endl;
-                            }
-                        }
-                        if (!sb.locations.empty()) {
-                            std::cout << "[config]  locations: " << sb.locations.size() << std::endl;
-                            for (std::size_t li = 0; li < sb.locations.size(); ++li) {
-                                const LocationBlock &lb = sb.locations[li];
-                                std::cout << "[config]   location '" << lb.path << "'"
-                                          << " root=" << lb.root
-                                          << " index=" << lb.index
-                                          << " autoindex=" << (lb.autoindex ? "on" : "off")
-                                          << std::endl;
-                                if (!lb.allowedMethods.empty()) {
-                                    std::cout << "[config]    methods:";
-                                    for (std::size_t mi = 0; mi < lb.allowedMethods.size(); ++mi) {
-                                        std::cout << " " << lb.allowedMethods[mi];
-                                    }
-                                    std::cout << std::endl;
-                                }
-                                if (!lb.uploadStore.empty())
-                                    std::cout << "[config]    upload_store: " << lb.uploadStore << std::endl;
-                                if (!lb.redirect.empty())
-                                    std::cout << "[config]    return: " << lb.redirect << std::endl;
-                                if (!lb.cgiExtension.empty())
-                                    std::cout << "[config]    cgi_extension: " << lb.cgiExtension << std::endl;
-                            }
-                        }
-            */
-            // Collect listen ports for server startup
             if (cfg.servers[i].listenPort > 0)
                 ports.push_back(cfg.servers[i].listenPort);
         }

@@ -9,8 +9,8 @@ SRC = src/main.cpp \
 	Sockets/ListeningSocket.cpp \
 	Sockets/SimpleSocket.cpp \
 	Server/SimpleServer.cpp \
-	Server/Cgi.cpp \
-	Server/CgiDispatcher.cpp \
+	CGI/Cgi.cpp \
+	CGI/CgiDispatcher.cpp \
 	Server/Server.cpp \
 	Server/RequestHandler.cpp \
 	config/ConfigParser.cpp \
@@ -25,7 +25,7 @@ DEP_DIR = deps
 OBJ = $(addprefix $(OBJ_DIR)/, $(notdir $(SRC:.cpp=.o)))
 DEP = $(addprefix $(DEP_DIR)/, $(notdir $(SRC:.cpp=.d)))
 
-INCLUDES = -Isrc -ISockets -IServer -Iconfig
+INCLUDES = -Isrc -ISockets -IServer -Iconfig -ICGI
 
 all: $(NAME)
 
@@ -39,6 +39,9 @@ $(OBJ_DIR)/%.o: Sockets/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR)/%.o: Server/%.cpp | $(OBJ_DIR) $(DEP_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
+
+$(OBJ_DIR)/%.o: CGI/%.cpp | $(OBJ_DIR) $(DEP_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -MMD -MP -MF $(DEP_DIR)/$*.d -c $< -o $@
 
 $(OBJ_DIR)/%.o: config/%.cpp | $(OBJ_DIR) $(DEP_DIR)
