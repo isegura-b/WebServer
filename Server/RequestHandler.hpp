@@ -4,7 +4,7 @@
 #include "../config/Config.hpp"
 #include "../HTTP/HttpRequest.hpp"
 #include "../HTTP/HttpResponse.hpp"
-#include "CgiJob.hpp"
+#include "../cgi/CgiJob.hpp"
 #include <string>
 #include <sys/stat.h>
 

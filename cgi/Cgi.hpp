@@ -9,7 +9,7 @@
 #include <poll.h>
 
 class RequestHandler;
-class Connection;
+struct Connection;
 struct CgiJob;
 
 enum CgiFdType

@@ -3,8 +3,8 @@
 
 #include "SimpleServer.hpp"
 #include "RequestHandler.hpp"
-#include "Cgi.hpp"
-#include "CgiDispatcher.hpp"
+#include "../cgi/Cgi.hpp"
+#include "../cgi/CgiDispatcher.hpp"
 #include "../HTTP/HttpRequest.hpp"
 #include "../HTTP/ChunkedDecoder.hpp"
 #include "../config/Config.hpp"
