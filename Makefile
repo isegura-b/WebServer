@@ -9,11 +9,14 @@ SRC = src/main.cpp \
 	Sockets/ListeningSocket.cpp \
 	Sockets/SimpleSocket.cpp \
 	Server/SimpleServer.cpp \
+	Server/Cgi.cpp \
+	Server/CgiDispatcher.cpp \
 	Server/Server.cpp \
 	Server/RequestHandler.cpp \
 	config/ConfigParser.cpp \
 	HTTP/HttpRequest.cpp \
 	HTTP/HttpParser.cpp \
+	HTTP/ChunkedDecoder.cpp \
 	HTTP/HttpResponse.cpp 
 
 OBJ_DIR = obj

@@ -4,26 +4,9 @@
 #include "../config/Config.hpp"
 #include "../HTTP/HttpRequest.hpp"
 #include "../HTTP/HttpResponse.hpp"
+#include "CgiJob.hpp"
 #include <string>
 #include <sys/stat.h>
-
-struct CgiJob
-{
-	enum Decision
-	{
-		CGI_NO,
-		CGI_YES,
-		CGI_ERROR
-	};
-	std::string interpreter;
-	std::string scriptFilename;
-	std::string scriptName;
-	std::string pathInfo;
-	std::string queryString;
-	std::string cwd;
-	std::map<std::string, std::string> env;
-	CgiJob() {}
-};
 
 class RequestHandler
 {
@@ -48,7 +31,6 @@ private:
 public:
 	RequestHandler(const Config& cfg);
 	HttpResponse handle(const HttpRequest& req, int port);
-	CgiJob::Decision buildCgiJob(const HttpRequest& req, int port, CgiJob& job, HttpResponse& errorRes);
 	HttpResponse errorForPort(int code, int port);
 };
 
