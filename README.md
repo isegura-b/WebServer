@@ -1,5 +1,8 @@
 Webserv - HTTP/1.1 Server  
 =
+*This project has been created as part of the 42 curriculum
+by isegura-, aprenafe, cmanica-*
+
 📖 Overview
 -
 
@@ -47,3 +50,48 @@ Start the server by providing a configuration file. If no file is provided, it a
 Example:
 
 ./webserv config/default.conf
+
+🏗️ Architecture
+-
+
+The server follows a Reactor Pattern architecture:
+
+    Initialization: Parses the config file and sets up listening sockets.
+    Event Loop: Uses poll() to monitor file descriptors for events.
+    Accepting: New connections are accepted and added to the monitored set.
+    Handling:
+        Request Parsing: Reads raw bytes from the socket and constructs an HttpRequest object.
+        Processing: The Server logic routes the request to static file handling or CGI execution.
+        Response Generation: Builds an HttpResponse object (headers + body).
+    Sending: The response is written back to the socket in non-blocking chunks.
+
+🧪 Testing
+-
+
+Simple Request
+-
+
+You can test the server using curl or a web browser:
+
+curl -v http://localhost:8080/index.html
+
+File Upload (POST)
+-
+
+curl -X POST -F "file=@/path/to/image.jpg" http://localhost:8080/upload
+
+Stress Testing (Siege)
+-
+
+To ensure the server doesn't crash under load and has no memory leaks:
+
+siege -b -t 30S http://localhost:8080/
+
+📂 Project Structure
+-
+    src/: Main entry point.
+    Sockets/: Socket creation, binding, and listening logic.
+    Server/: Server loop, connection handling, and request routing.
+    HTTP/: Parsing requests (headers, chunked body) and formatting responses.
+    cgi/: Environment setup and execve logic for scripts.
+    config/: Configuration file tokenizer and parser.
