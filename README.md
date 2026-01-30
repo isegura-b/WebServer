@@ -95,3 +95,7 @@ siege -b -t 30S http://localhost:8080/
     HTTP/: Parsing requests (headers, chunked body) and formatting responses.
     cgi/: Environment setup and execve logic for scripts.
     config/: Configuration file tokenizer and parser.
+
+📂 Project Structure
+-
+AI served as a "Pair Programmer" to accelerate learning and debugging, but the implementation details and architectural decisions remain the work of the authors.
