@@ -5,6 +5,7 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>  // <--- ADDED: Required for inet_ntoa
 #include <cstring>
 #include <cstdio>
 #include <cerrno>
@@ -33,14 +34,6 @@ Connection::Connection(int f)
 {
 }
 
-// SimpleServer
-//Server::Server()
-//    : SimpleServer(AF_INET, SOCK_STREAM, 0, 8080, INADDR_ANY, 10)
-//{
-//    int sfd = getServerSocket()->getSocket();
-//    _listenFds.push_back(sfd);
-//}
-
 Server::~Server()
 {
     for (std::size_t i = 0; i < _extraListeners.size(); ++i)
@@ -56,7 +49,7 @@ Server::Server(const std::vector<int> &ports, const Config &cfg)
     for (std::size_t i = 1; i < ports.size(); ++i) // extra listeners for remaining ports
     {
         ListeningSocket *ls = new ListeningSocket(AF_INET, SOCK_STREAM, 0, ports[i], INADDR_ANY, 10);
-		_extraListeners.push_back(ls);
+        _extraListeners.push_back(ls);
         _listenFds.push_back(ls->getSocket());
     }
 }
@@ -77,7 +70,7 @@ void Server::acceptNew(int listenFd)
     int p = 0;
     if (::getsockname(listenFd, (struct sockaddr *)&lsaddr, &llen) == 0)
         p = ntohs(lsaddr.sin_port);
-    std::cout << "[+] Nueva conexión fd=" << cfd << " (http://localhost:" << p << "/)" << std::endl;
+    std::cout << "[+] New connection fd=" << cfd << " (http://localhost:" << p << "/)" << std::endl;
 }
 
 void Server::processReadable(Connection &c)
@@ -187,7 +180,7 @@ void Server::processReadable(Connection &c)
         }
     }
 
-    // Conecition with request handler
+    // Connection with request handler
     if (c.state == Connection::READY_TO_RESPOND)
     {
         struct sockaddr_in addr;
@@ -197,6 +190,16 @@ void Server::processReadable(Connection &c)
             perror("getsockname");
         }
         int port = ntohs(addr.sin_port);
+
+        // --- NEW: Retrieve Client IP for CGI ---
+        struct sockaddr_in peerAddr;
+        socklen_t peerLen = sizeof(peerAddr);
+        std::string clientIp = "0.0.0.0";
+        if (::getpeername(c.fd, (struct sockaddr *)&peerAddr, &peerLen) == 0)
+        {
+            clientIp = inet_ntoa(peerAddr.sin_addr);
+        }
+        // ---------------------------------------
 
         if (c.chunked.badRequest)
         {
@@ -208,7 +211,10 @@ void Server::processReadable(Connection &c)
 
         CgiJob job;
         int cgiErrCode = 0;
-        CgiJob::Decision decision = _cgiDispatcher.buildJob(c.req, port, job, cgiErrCode);
+        
+        // --- FIXED: Pass clientIp (5 arguments) ---
+        CgiJob::Decision decision = _cgiDispatcher.buildJob(c.req, port, clientIp, job, cgiErrCode);
+        
         if (decision == CgiJob::CGI_ERROR)
         {
             HttpResponse res = _handler.errorForPort(cgiErrCode, port);
@@ -259,12 +265,12 @@ void Server::launch()
 {
     struct sockaddr_in addr = getServerSocket()->getAddress();
     int port = ntohs(addr.sin_port);
-    std::cout << "Servidor escuchando en puerto " << port << std::endl;
+    std::cout << "Server listening on port " << port << std::endl;
     std::cout << "URL: http://localhost:" << port << "/" << std::endl;
     for (std::size_t i = 0; i < _extraListeners.size(); ++i)
     {
         int p = ntohs(_extraListeners[i]->getAddress().sin_port);
-        std::cout << "Servidor escuchando en puerto " << p << std::endl;
+        std::cout << "Server listening on port " << p << std::endl;
         std::cout << "URL: http://localhost:" << p << "/" << std::endl;
     }
 
@@ -286,12 +292,12 @@ void Server::launch()
         {
             struct pollfd p;
             p.fd = i->first;
+            p.events = POLLIN;
             if (i->second.state == Connection::WRITING_RESPONSE)
                 p.events = POLLOUT;
             else if (i->second.state == Connection::CGI_IN_PROGRESS)
-                p.events = 0;
-            else
-                p.events = POLLIN;
+                p.events = 0; // CGI handles events
+            
             p.revents = 0;
             pfds.push_back(p);
         }
@@ -357,5 +363,3 @@ void Server::launch()
         _cgi.tick(now, _connections, _handler);
     }
 }
-
-// No multi-port

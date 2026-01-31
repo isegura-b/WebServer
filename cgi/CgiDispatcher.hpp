@@ -9,7 +9,7 @@ class CgiDispatcher
 {
 public:
     explicit CgiDispatcher(const Config &cfg);
-    CgiJob::Decision buildJob(const HttpRequest &req, int port, CgiJob &job, int &errorCode);
+    CgiJob::Decision buildJob(const HttpRequest &req, int port, const std::string &clientIp, CgiJob &job, int &errorCode);
 
 private:
     const Config &_cfg;

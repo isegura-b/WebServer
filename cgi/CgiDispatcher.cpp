@@ -156,7 +156,7 @@ const LocationBlock *CgiDispatcher::findBestLocation(const ServerBlock *server, 
     return best;
 }
 
-CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, CgiJob &job, int &errorCode)
+CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, const std::string &clientIp, CgiJob &job, int &errorCode)
 {
     errorCode = 0;
     const ServerBlock *server = findBestServer(req, port);
@@ -236,14 +236,30 @@ CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, CgiJo
     job.env["QUERY_STRING"] = query;
     job.env["SCRIPT_NAME"] = scriptName;
     job.env["SCRIPT_FILENAME"] = scriptFilename;
-    if (!pathInfo.empty())
+    
+    // --- ADDED START ---
+    if (!pathInfo.empty()) {
         job.env["PATH_INFO"] = pathInfo;
+        // RFC 3875: PATH_TRANSLATED must map PATH_INFO to the file system
+        job.env["PATH_TRANSLATED"] = makeAbsolutePath(docRoot + pathInfo); 
+    }
+    
+    // REQUIRED by PHP-CGI (Security)
+    job.env["REDIRECT_STATUS"] = "200"; 
+    
+    // REQUIRED for logging/auth scripts
+    job.env["REMOTE_ADDR"] = clientIp;  
+    // --- ADDED END ---
+
     job.env["SERVER_PROTOCOL"] = req.version;
     job.env["GATEWAY_INTERFACE"] = "CGI/1.1";
+    job.env["SERVER_SOFTWARE"] = "webserv/1.0"; // Good practice
+
     if (!server->serverName.empty())
         job.env["SERVER_NAME"] = server->serverName;
     else
         job.env["SERVER_NAME"] = "localhost";
+    
     job.env["SERVER_PORT"] = toStringSize(static_cast<size_t>(server->listenPort));
 
     if (req.headers.count("Content-Type"))
@@ -259,3 +275,107 @@ CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, CgiJo
 
     return CgiJob::CGI_YES;
 }
+
+//CgiJob::Decision CgiDispatcher::buildJob(const HttpRequest &req, int port, CgiJob &job, int &errorCode)
+//{
+//    errorCode = 0;
+//    const ServerBlock *server = findBestServer(req, port);
+//    if (!server)
+//    {
+//        errorCode = 400;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    std::string cleanPath;
+//    std::string query;
+//    splitPathQuery(req.path, cleanPath, query);
+//
+//    const LocationBlock *loc = findBestLocation(server, cleanPath);
+//    if (!loc)
+//    {
+//        errorCode = 404;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    if (!isMethodAllowed(loc, req.method))
+//    {
+//        errorCode = 405;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    if (server->clientMaxBodySize > 0 && req.body.size() > server->clientMaxBodySize)
+//    {
+//        errorCode = 413;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    if (loc->cgiPass.empty())
+//        return CgiJob::CGI_NO;
+//
+//    std::string ext;
+//    size_t ext_pos = std::string::npos;
+//    if (!matchCgiExtension(loc->cgiPass, cleanPath, ext, ext_pos))
+//        return CgiJob::CGI_NO;
+//
+//    std::string scriptName = cleanPath.substr(0, ext_pos + ext.size());
+//    std::string pathInfo = "";
+//    if (cleanPath.size() > ext_pos + ext.size())
+//        pathInfo = cleanPath.substr(ext_pos + ext.size());
+//
+//    std::string docRoot = loc->root.empty() ? server->root : loc->root;
+//    std::string scriptFilename = docRoot + scriptName;
+//    scriptFilename = makeAbsolutePath(scriptFilename);
+//
+//    if (!fileExists(scriptFilename))
+//    {
+//        errorCode = 404;
+//        return CgiJob::CGI_ERROR;
+//    }
+//    if (isDirectory(scriptFilename))
+//    {
+//        errorCode = 403;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    std::map<std::string, std::string>::const_iterator it = loc->cgiPass.find(ext);
+//    if (it == loc->cgiPass.end() || it->second.empty())
+//    {
+//        errorCode = 500;
+//        return CgiJob::CGI_ERROR;
+//    }
+//
+//    job.interpreter = it->second;
+//    job.scriptFilename = scriptFilename;
+//    job.scriptName = scriptName;
+//    job.pathInfo = pathInfo;
+//    job.queryString = query;
+//    job.cwd = dirnameOf(scriptFilename);
+//
+//    job.env.clear();
+//    job.env["REQUEST_METHOD"] = req.method;
+//    job.env["QUERY_STRING"] = query;
+//    job.env["SCRIPT_NAME"] = scriptName;
+//    job.env["SCRIPT_FILENAME"] = scriptFilename;
+//    if (!pathInfo.empty())
+//        job.env["PATH_INFO"] = pathInfo;
+//    job.env["SERVER_PROTOCOL"] = req.version;
+//    job.env["GATEWAY_INTERFACE"] = "CGI/1.1";
+//    if (!server->serverName.empty())
+//        job.env["SERVER_NAME"] = server->serverName;
+//    else
+//        job.env["SERVER_NAME"] = "localhost";
+//    job.env["SERVER_PORT"] = toStringSize(static_cast<size_t>(server->listenPort));
+//
+//    if (req.headers.count("Content-Type"))
+//        job.env["CONTENT_TYPE"] = req.headers.find("Content-Type")->second;
+//    if (!req.body.empty())
+//        job.env["CONTENT_LENGTH"] = toStringSize(req.body.size());
+//
+//    for (std::map<std::string, std::string>::const_iterator hit = req.headers.begin(); hit != req.headers.end(); ++hit)
+//    {
+//        std::string key = toUpperUnderscore(hit->first);
+//        job.env["HTTP_" + key] = hit->second;
+//    }
+//
+//    return CgiJob::CGI_YES;
+//}

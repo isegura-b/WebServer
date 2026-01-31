@@ -257,14 +257,38 @@ void CgiModule::cleanupCgi(int clientFd)
     if (it == _ctx.end())
         return;
     CgiContext &ctx = it->second;
-    if (ctx.stdinWrite >= 0)
-        ::close(ctx.stdinWrite);
-    if (ctx.stdoutRead >= 0)
-        ::close(ctx.stdoutRead);
-    if (ctx.stderrRead >= 0)
-        ::close(ctx.stderrRead);
+
+    // Close pipes
+    if (ctx.stdinWrite >= 0) ::close(ctx.stdinWrite);
+    if (ctx.stdoutRead >= 0) ::close(ctx.stdoutRead);
+    if (ctx.stderrRead >= 0) ::close(ctx.stderrRead);
+
+    if (ctx.pid > 0)
+    {
+        int status;
+        if (waitpid(ctx.pid, &status, WNOHANG) == 0) {
+            ::kill(ctx.pid, SIGKILL);
+            waitpid(ctx.pid, &status, 0);
+        }
+    }
+
     _ctx.erase(it);
 }
+
+//void CgiModule::cleanupCgi(int clientFd)
+//{
+//    std::map<int, CgiContext>::iterator it = _ctx.find(clientFd);
+//    if (it == _ctx.end())
+//        return;
+//    CgiContext &ctx = it->second;
+//    if (ctx.stdinWrite >= 0)
+//        ::close(ctx.stdinWrite);
+//    if (ctx.stdoutRead >= 0)
+//        ::close(ctx.stdoutRead);
+//    if (ctx.stderrRead >= 0)
+//        ::close(ctx.stderrRead);
+//    _ctx.erase(it);
+//}
 
 void CgiModule::handleEvent(int clientFd, int fdType, short revents, std::map<int, Connection> &conns, RequestHandler &handler)
 {
@@ -359,10 +383,9 @@ void CgiModule::tick(std::time_t now, std::map<int, Connection> &conns, RequestH
     while (it != _ctx.end())
     {
         CgiContext &ctx = it->second;
+
         if (now - ctx.startTime > 10)
         {
-            if (ctx.pid > 0)
-                ::kill(ctx.pid, SIGKILL);
             std::map<int, Connection>::iterator conIt = conns.find(ctx.clientFd);
             if (conIt != conns.end())
             {
@@ -371,15 +394,52 @@ void CgiModule::tick(std::time_t now, std::map<int, Connection> &conns, RequestH
                 conn.out = res.serialize();
                 conn.state = Connection::WRITING_RESPONSE;
             }
-            cleanupCgi(ctx.clientFd);
-            it = _ctx.begin();
+
+            int fdToClean = ctx.clientFd;
+            ++it; 
+            cleanupCgi(fdToClean);
             continue;
         }
+
         if (ctx.pid > 0)
-            ::waitpid(ctx.pid, NULL, WNOHANG);
+        {
+            int status;
+            int ret = waitpid(ctx.pid, &status, WNOHANG);
+            if (ret > 0) {
+                ctx.pid = -1; 
+            }
+        }
         ++it;
     }
 }
+
+//void CgiModule::tick(std::time_t now, std::map<int, Connection> &conns, RequestHandler &handler)
+//{
+//    std::map<int, CgiContext>::iterator it = _ctx.begin();
+//    while (it != _ctx.end())
+//    {
+//        CgiContext &ctx = it->second;
+//        if (now - ctx.startTime > 10)
+//        {
+//            if (ctx.pid > 0)
+//                ::kill(ctx.pid, SIGKILL);
+//            std::map<int, Connection>::iterator conIt = conns.find(ctx.clientFd);
+//            if (conIt != conns.end())
+//            {
+//                HttpResponse res = handler.errorForPort(504, ctx.listenPort);
+//                Connection &conn = conIt->second;
+//                conn.out = res.serialize();
+//                conn.state = Connection::WRITING_RESPONSE;
+//            }
+//            cleanupCgi(ctx.clientFd);
+//            it = _ctx.begin();
+//            continue;
+//        }
+//        if (ctx.pid > 0)
+//            ::waitpid(ctx.pid, NULL, WNOHANG);
+//        ++it;
+//    }
+//}
 
 void CgiModule::killForClient(int clientFd)
 {
