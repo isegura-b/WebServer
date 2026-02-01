@@ -294,7 +294,7 @@ void Server::launch()
             p.fd = i->first;
             p.events = POLLIN;
             if (i->second.state == Connection::WRITING_RESPONSE)
-                p.events = POLLOUT;
+                p.events = POLLIN | POLLOUT;
             else if (i->second.state == Connection::CGI_IN_PROGRESS)
                 p.events = 0; // CGI handles events
             

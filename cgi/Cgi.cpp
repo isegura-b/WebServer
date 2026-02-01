@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <cerrno>
 #include <sstream>
 #include <vector>
 #include <iostream>
@@ -319,7 +318,7 @@ void CgiModule::handleEvent(int clientFd, int fdType, short revents, std::map<in
                 {
                     ctx.bodySent += static_cast<size_t>(w);
                 }
-                else if (w < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                else if (w < 0)
                 {
                     finalizeCgi(clientFd, false, conns, handler);
                     return;
@@ -362,8 +361,6 @@ void CgiModule::handleEvent(int clientFd, int fdType, short revents, std::map<in
                 }
                 else
                 {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
-                        break;
                     finalizeCgi(clientFd, false, conns, handler);
                     return;
                 }
